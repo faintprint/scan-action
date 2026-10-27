@@ -1,0 +1,144 @@
+# Faintprint for GitHub Actions: installs Faintprint with your deploy token,
+# scans what you name, keeps the reports as an artefact, and passes or fails
+# the job by Faintprint's own exit code (0 pass, 1 fail, 2 could not run,
+# 3 not finished). The work is done by step.sh beside this file; inputs reach
+# it through environment variables only. Third-party actions are pinned by
+# commit.
+
+name: Faintprint scan
+description: Scan MCP servers for signs of a supply-chain attack, keep the reports, and pass or fail the job by the result.
+author: Faintprint
+branding:
+  icon: shield
+  color: gray-dark
+
+inputs:
+  scan:
+    description: "What to scan, one per line: a saved tool list, a web address, or an MCP client config file in the repository."
+    required: true
+  tools:
+    description: "Saved tool lists for local servers named in a config file, one NAME=FILE per line."
+    required: false
+    default: ""
+  fail-on:
+    description: "The 'Signs of an attack' level that fails the job: minor, suspicious, likely-attack or never."
+    required: false
+    default: suspicious
+  review:
+    description: "Run the AI review of borderline passages on your own Anthropic key: true or false."
+    required: false
+    default: "false"
+  max-cost:
+    description: "The most one run's AI review may cost, in US dollars; a review estimated above it does not start."
+    required: false
+    default: "1.00"
+  allow-unfinished:
+    description: "Let a 'not finished' result (exit 3) pass, with a warning: true or false."
+    required: false
+    default: "false"
+  version:
+    description: "The Faintprint version to install."
+    required: false
+    default: "0.2.0"
+  reports:
+    description: "The report folder, and the name of the artefact it is kept as."
+    required: false
+    default: faintprint-reports
+  deploy-user:
+    description: "Your Faintprint deploy token's name. Pass the secret FAINTPRINT_USER."
+    required: true
+  deploy-token:
+    description: "Your Faintprint deploy token's secret. Pass the secret FAINTPRINT_TOKEN."
+    required: true
+  anthropic-api-key:
+    description: "Your Anthropic API key, used only when review is true. Pass the secret ANTHROPIC_API_KEY."
+    required: false
+    default: ""
+
+outputs:
+  exit-code:
+    description: "Faintprint's exit code: 0 pass, 1 fail, 2 could not run, 3 not finished. Empty if it was not installed."
+    value: ${{ steps.scan.outputs.exit-code }}
+  reports:
+    description: "The report folder."
+    value: ${{ inputs.reports }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the inputs
+      shell: sh
+      env:
+        FP_PLATFORM: github
+        FP_SCAN: ${{ inputs.scan }}
+        FP_TOOLS: ${{ inputs.tools }}
+        FP_FAIL_ON: ${{ inputs.fail-on }}
+        FP_REVIEW: ${{ inputs.review }}
+        FP_MAX_COST: ${{ inputs.max-cost }}
+        FP_ALLOW_UNFINISHED: ${{ inputs.allow-unfinished }}
+        FP_VERSION: ${{ inputs.version }}
+        FP_REPORTS: ${{ inputs.reports }}
+        FP_KEY_SET: ${{ inputs.anthropic-api-key != '' }}
+        FAINTPRINT_USER: ${{ inputs.deploy-user }}
+        FAINTPRINT_TOKEN: ${{ inputs.deploy-token }}
+        ANTHROPIC_API_KEY: ""
+      run: sh "$GITHUB_ACTION_PATH/step.sh" check
+
+    - name: Set up Python
+      id: python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: "3.13"
+        update-environment: false
+
+    - name: Install Faintprint
+      shell: sh
+      env:
+        FP_PLATFORM: github
+        FP_VERSION: ${{ inputs.version }}
+        FP_PYTHON: ${{ steps.python.outputs.python-path }}
+        FP_VENV: ${{ runner.temp }}/faintprint-venv
+        FP_CONSTRAINTS: ${{ github.action_path }}/constraints.txt
+        FAINTPRINT_USER: ${{ inputs.deploy-user }}
+        FAINTPRINT_TOKEN: ${{ inputs.deploy-token }}
+        ANTHROPIC_API_KEY: ""
+      run: sh "$GITHUB_ACTION_PATH/step.sh" install
+
+    - name: Scan
+      id: scan
+      shell: sh
+      env:
+        FP_PLATFORM: github
+        FP_SCAN: ${{ inputs.scan }}
+        FP_TOOLS: ${{ inputs.tools }}
+        FP_FAIL_ON: ${{ inputs.fail-on }}
+        FP_REVIEW: ${{ inputs.review }}
+        FP_MAX_COST: ${{ inputs.max-cost }}
+        FP_ALLOW_UNFINISHED: ${{ inputs.allow-unfinished }}
+        FP_REPORTS: ${{ inputs.reports }}
+        FP_VENV: ${{ runner.temp }}/faintprint-venv
+        FAINTPRINT_USER: ""
+        FAINTPRINT_TOKEN: ""
+        ANTHROPIC_API_KEY: ${{ inputs.review == 'true' && inputs.anthropic-api-key || '' }}
+      run: |
+        code=0
+        sh "$GITHUB_ACTION_PATH/step.sh" scan || code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+    - name: Keep the reports
+      if: steps.scan.outputs.exit-code != ''
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.reports }}
+        path: ${{ inputs.reports }}
+        if-no-files-found: warn
+
+    - name: Result
+      if: steps.scan.outputs.exit-code != ''
+      shell: sh
+      env:
+        FP_PLATFORM: github
+        FP_FAIL_ON: ${{ inputs.fail-on }}
+        FP_REPORTS: ${{ inputs.reports }}
+        FP_CODE: ${{ steps.scan.outputs.exit-code }}
+      run: sh "$GITHUB_ACTION_PATH/step.sh" result "$FP_CODE"

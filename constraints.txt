@@ -1,7 +1,7 @@
-# The library versions Faintprint 0.2.0 was tested on. The step installs
+# The library versions Faintprint 0.3.0 was tested on. The step installs
 # with them, so that a new release of a library cannot change your build's
 # result overnight. Generated with each release; do not edit.
-faintprint==0.2.0
+faintprint==0.3.0
 annotated-types==0.8.0
 anthropic==1.4.0
 anyio==4.15.1

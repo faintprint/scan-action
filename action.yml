@@ -3,7 +3,8 @@
 # the job by Faintprint's own exit code (0 pass, 1 fail, 2 could not run,
 # 3 not finished). The work is done by step.sh beside this file; inputs reach
 # it through environment variables only. Third-party actions are pinned by
-# commit.
+# commit. Since 1.1.0 the reports include faintprint.sarif, which the step
+# uploads to GitHub code scanning when upload-sarif is true.
 
 name: Faintprint scan
 description: Scan MCP servers for signs of a supply-chain attack, keep the reports, and pass or fail the job by the result.
@@ -39,11 +40,19 @@ inputs:
   version:
     description: "The Faintprint version to install."
     required: false
-    default: "0.2.0"
+    default: "0.3.0"
   reports:
     description: "The report folder, and the name of the artefact it is kept as."
     required: false
     default: faintprint-reports
+  upload-sarif:
+    description: "Upload the findings (reports/faintprint.sarif) to GitHub code scanning, the Security tab: true or false. Needs the workflow permission security-events: write (and actions: read, contents: read on a private repository), and GitHub Code Security on a private repository."
+    required: false
+    default: "false"
+  sarif-category:
+    description: "The code scanning category of the upload. Two Faintprint scans in one job, or a matrix, need one each, or the second replaces the first's alerts."
+    required: false
+    default: faintprint-${{ github.job }}
   deploy-user:
     description: "Your Faintprint deploy token's name. Pass the secret FAINTPRINT_USER."
     required: true
@@ -78,6 +87,7 @@ runs:
         FP_ALLOW_UNFINISHED: ${{ inputs.allow-unfinished }}
         FP_VERSION: ${{ inputs.version }}
         FP_REPORTS: ${{ inputs.reports }}
+        FP_UPLOAD_SARIF: ${{ inputs.upload-sarif }}
         FP_KEY_SET: ${{ inputs.anthropic-api-key != '' }}
         FAINTPRINT_USER: ${{ inputs.deploy-user }}
         FAINTPRINT_TOKEN: ${{ inputs.deploy-token }}
@@ -133,6 +143,15 @@ runs:
         path: ${{ inputs.reports }}
         if-no-files-found: warn
 
+    - name: Upload to code scanning
+      id: sarif
+      if: steps.scan.outputs.exit-code != '' && inputs.upload-sarif == 'true'
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      with:
+        sarif_file: ${{ inputs.reports }}/faintprint.sarif
+        category: ${{ inputs.sarif-category }}
+
     - name: Result
       if: steps.scan.outputs.exit-code != ''
       shell: sh
@@ -141,4 +160,5 @@ runs:
         FP_FAIL_ON: ${{ inputs.fail-on }}
         FP_REPORTS: ${{ inputs.reports }}
         FP_CODE: ${{ steps.scan.outputs.exit-code }}
+        FP_SARIF_UPLOAD: ${{ steps.sarif.outcome }}
       run: sh "$GITHUB_ACTION_PATH/step.sh" result "$FP_CODE"

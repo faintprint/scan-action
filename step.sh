@@ -23,6 +23,8 @@
 #   FP_VENV              where the environment is built
 #   FP_CONSTRAINTS       the tested library list (may be empty)
 #   FP_KEY_SET           true | false: whether a key was given (GitHub's check)
+#   FP_UPLOAD_SARIF      true | false: whether the Action uploads the SARIF file (GitHub)
+#   FP_SARIF_UPLOAD      the upload step's outcome, for the result line (GitHub)
 #   FAINTPRINT_USER, FAINTPRINT_TOKEN   the customer's deploy token
 #   ANTHROPIC_API_KEY    the customer's key, for the AI review only
 #
@@ -30,10 +32,14 @@
 # address, which pip prints as ****. The Anthropic key goes to the scan only,
 # and only when the review is on. Nothing here prints either, and nothing
 # here echoes an input into a GitHub workflow command before checking it.
+#
+# Since 1.1.0 (Faintprint 0.3.0) the scan also writes the findings as SARIF,
+# $FP_REPORTS/faintprint.sarif, whenever the installed Faintprint can.
 
 set -eu
 
-STEP_VERSION=1.0.0
+STEP_VERSION=1.1.0
+SARIF_NAME=faintprint.sarif
 INDEX=gitlab.com/api/v4/projects/faintprint%2Ffaintprint/packages/pypi/simple
 
 say() { printf '%s\n' "$*"; }
@@ -103,6 +109,10 @@ do_check() {
     true|false) ;;
     *) error "allow-unfinished must be true or false."; bad=1 ;;
   esac
+  case "${FP_UPLOAD_SARIF:-false}" in
+    true|false) ;;
+    *) error "upload-sarif must be true or false."; bad=1 ;;
+  esac
   case "${FP_MAX_COST:-}" in
     ''|*[!0-9.]*|.*|*.|*.*.*) error "max-cost must be a number of US dollars, like 1.00."; bad=1 ;;
   esac
@@ -170,6 +180,11 @@ EOF
   if [ "$FP_ALLOW_UNFINISHED" = true ]; then
     set -- "$@" --allow-unfinished
   fi
+  # The SARIF file, when this Faintprint writes one (0.3.0 and later); an
+  # older version pinned with `version` still scans, without it.
+  if "$FP_VENV/bin/faintprint" scan --help 2>/dev/null | grep -q -e '--sarif'; then
+    set -- "$@" --sarif "$FP_REPORTS/$SARIF_NAME"
+  fi
   set -- "$@" --
   while IFS= read -r line; do
     [ -n "$line" ] || continue
@@ -200,6 +215,11 @@ EOF
 
 do_result() {
   code="${1:-}"
+  refused=false
+  if [ "${FP_SARIF_UPLOAD:-}" = failure ]; then
+    refused=true
+    error "The SARIF upload to GitHub code scanning failed. The workflow needs the permission security-events: write (and, on a private repository, actions: read and contents: read), and a private repository needs GitHub Code Security. Faintprint 0.2.0 and earlier write no SARIF file. The scan's own result follows."
+  fi
   case "$code" in
     0) say "Faintprint: pass. The reports are in $(where_reports)." ;;
     1) error "Faintprint: fail. At least one server shows signs of an attack at or above the fail-on level ($FP_FAIL_ON). Open index.html in $(where_reports) to see which server and why." ;;
@@ -207,6 +227,10 @@ do_result() {
     3) error "Faintprint: not finished. Something was not checked: an AI review not run, a server not reachable, or a local server without its saved tool list. To finish it, turn on review (with ANTHROPIC_API_KEY), give the missing tool lists in tools, or set allow-unfinished to true to let it pass with a warning. The reports in $(where_reports) say what is missing." ;;
     *) error "Faintprint ended with an unexpected exit code."; code=2 ;;
   esac
+  # A refused upload fails the job even when the scan passed.
+  if [ "$refused" = true ] && [ "$code" = 0 ]; then
+    code=2
+  fi
   exit "$code"
 }
 

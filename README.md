@@ -34,7 +34,7 @@ jobs:
 ```
 
 For a build check that changes only when you decide, pin the step to a
-commit instead of `v1`: `faintprint/scan-action@<full commit> # v1.0.0`.
+commit instead of `v1`: `faintprint/scan-action@<full commit> # v1.1.0`.
 Dependabot can propose new pins.
 
 ## Inputs
@@ -47,8 +47,10 @@ Dependabot can propose new pins.
 | `review` | run the AI review of borderline passages, on your own Anthropic key | `false` |
 | `max-cost` | the most one run's AI review may cost, in US dollars; a review estimated above it does not start | `1.00` |
 | `allow-unfinished` | let a "not finished" result pass, with a warning | `false` |
-| `version` | the Faintprint version to install | `0.2.0` |
+| `version` | the Faintprint version to install | `0.3.0` |
 | `reports` | the report folder, and the name of the artefact it is kept as | `faintprint-reports` |
+| `upload-sarif` | upload the findings to GitHub code scanning, the Security tab (see below) | `false` |
+| `sarif-category` | the code scanning category of the upload; two Faintprint steps in one job, or a matrix, need one each | `faintprint-<job id>` |
 | `deploy-user` | your deploy token's name: pass `${{ secrets.FAINTPRINT_USER }}` | required |
 | `deploy-token` | your deploy token's secret: pass `${{ secrets.FAINTPRINT_TOKEN }}` | required |
 | `anthropic-api-key` | your Anthropic API key, used only when `review` is `true` | none |
@@ -70,9 +72,41 @@ A borderline passage is only settled by the AI review, so without it a
 server that has one ends "not finished". Turn on `review`, or set
 `allow-unfinished: true` to let such a run pass with a warning.
 
-The reports (one page and one JSON file per server, `index.html` and
-`summary.json`) are kept as an artefact on the run's summary page, also
-when the job fails. **On a public repository anyone can download them.**
+The reports (one page and one JSON file per server, `index.html`,
+`summary.json` and `faintprint.sarif`) are kept as an artefact on the run's
+summary page, also when the job fails. **On a public repository anyone can
+download them.**
+
+## GitHub's Security tab
+
+With `upload-sarif: true` the step uploads `faintprint.sarif` to GitHub
+code scanning, and each finding becomes an alert in the repository's
+Security tab:
+
+- each sign of an attack, at GitHub's critical (Likely attack), high
+  (Suspicious) or medium (Minor) severity;
+- a note for each borderline passage the AI review did not read, or read
+  and could not decide on.
+
+Each alert points at the line that holds the passage, in a saved tool list
+in the repository, or at the server's entry in a config file. The same
+finding stays the same alert from run to run, until it is fixed.
+
+The upload needs the workflow permission `security-events: write`, which a
+step cannot give itself:
+
+```yaml
+permissions:
+  contents: read
+  actions: read            # private repositories only
+  security-events: write
+```
+
+Code scanning is free on public repositories. On a private repository it
+needs GitHub Code Security on your organisation; without it the upload is
+refused and the job fails with one plain line. The upload runs also when the
+scan failed, which is when the alerts matter. `faintprint.sarif` is in the
+reports either way, for any other tool that reads SARIF.
 
 ## The AI review
 
@@ -120,6 +154,10 @@ Linux and macOS runners. Not Windows.
 `v1` moves with every 1.x release; `v1.0.0` and each commit never move. A
 new Faintprint release comes with a new 1.x release of this step that makes
 it the default. A change that breaks an input would be `v2`.
+
+`v1.1.0` writes `faintprint.sarif` with Faintprint 0.3.0 and later, and adds
+`upload-sarif` and `sarif-category`. With an older `version` it scans as
+before, without the SARIF file.
 
 ## About Faintprint
 

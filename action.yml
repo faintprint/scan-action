@@ -4,7 +4,8 @@
 # 3 not finished). The work is done by step.sh beside this file; inputs reach
 # it through environment variables only. Third-party actions are pinned by
 # commit. Since 1.1.0 the reports include faintprint.sarif, which the step
-# uploads to GitHub code scanning when upload-sarif is true.
+# uploads to GitHub code scanning when upload-sarif is true. 1.2.0 makes
+# Faintprint 0.4.0 the default.
 
 name: Faintprint scan
 description: Scan MCP servers for signs of a supply-chain attack, keep the reports, and pass or fail the job by the result.
@@ -40,7 +41,7 @@ inputs:
   version:
     description: "The Faintprint version to install."
     required: false
-    default: "0.3.0"
+    default: "0.4.0"
   reports:
     description: "The report folder, and the name of the artefact it is kept as."
     required: false

@@ -35,10 +35,16 @@
 #
 # Since 1.1.0 (Faintprint 0.3.0) the scan also writes the findings as SARIF,
 # $FP_REPORTS/faintprint.sarif, whenever the installed Faintprint can.
+#
+# 1.2.0 (Faintprint 0.4.0) changes only the default version. Faintprint 0.4.0
+# reads the machine's own config files when no name is given, and opens its
+# report in a browser when typed in a terminal; this step does neither: its
+# check stops an empty scan input, the scan always names what it scans after
+# --, and a job has no terminal and sets CI.
 
 set -eu
 
-STEP_VERSION=1.1.0
+STEP_VERSION=1.2.0
 SARIF_NAME=faintprint.sarif
 INDEX=gitlab.com/api/v4/projects/faintprint%2Ffaintprint/packages/pypi/simple
 

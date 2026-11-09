@@ -3,6 +3,7 @@
 # (action.yml) and the GitLab template (templates/scan.yml).
 #
 #   step.sh check      the inputs make sense and the deploy token is there
+#   step.sh key        with the review on, Anthropic accepts the key (free)
 #   step.sh install    Faintprint from the private index, into its own environment
 #   step.sh scan       run the scan; ends with Faintprint's own exit code
 #   step.sh result N   one plain line for exit code N, then exit N
@@ -41,10 +42,17 @@
 # report in a browser when typed in a terminal; this step does neither: its
 # check stops an empty scan input, the scan always names what it scans after
 # --, and a job has no terminal and sets CI.
+#
+# 1.3.0 (with Faintprint 0.5.0) adds `step.sh key`, at the start of the job when
+# the review is on, asks Anthropic's free token-counting endpoint whether it
+# accepts the key. It sends the key and one fixed word, never a server's
+# text, with Python's standard library only, and never follows a redirect
+# (the key would go with it). A refused key is said before anything is
+# installed; the job goes on, so the reports are still kept.
 
 set -eu
 
-STEP_VERSION=1.2.0
+STEP_VERSION=1.3.0
 SARIF_NAME=faintprint.sarif
 INDEX=gitlab.com/api/v4/projects/faintprint%2Ffaintprint/packages/pypi/simple
 
@@ -141,6 +149,45 @@ do_check() {
     warning "review is on but no ANTHROPIC_API_KEY was given: the AI review will not run, and the result will be 'not finished' (exit 3)."
   fi
   say "Faintprint pipeline step $STEP_VERSION: inputs checked."
+}
+
+# The model the AI review uses; the scanner's tests hold the two together.
+KEY_CHECK_MODEL=claude-opus-5
+
+do_key() {
+  if [ "${FP_REVIEW:-}" != true ] || [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+    return 0
+  fi
+  set +e
+  KEY_CHECK_MODEL="$KEY_CHECK_MODEL" "$FP_PYTHON" -I - <<'FAINTPRINT_KEY_CHECK'
+import json, os, sys, urllib.error, urllib.request
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+base = (os.environ.get("ANTHROPIC_BASE_URL") or "https://api.anthropic.com").rstrip("/")
+body = json.dumps({"model": os.environ["KEY_CHECK_MODEL"],
+                   "messages": [{"role": "user", "content": "ping"}]}).encode()
+request = urllib.request.Request(
+    base + "/v1/messages/count_tokens", data=body, method="POST",
+    headers={"x-api-key": os.environ["ANTHROPIC_API_KEY"], "anthropic-version": "2023-06-01",
+             "content-type": "application/json"})
+try:
+    with urllib.request.build_opener(NoRedirect).open(request, timeout=15):
+        sys.exit(0)
+except urllib.error.HTTPError as failure:
+    sys.exit(10 if failure.code in (401, 403) else 11)
+except Exception:
+    sys.exit(12)
+FAINTPRINT_KEY_CHECK
+  code=$?
+  set -e
+  case "$code" in
+    0) say "Your Anthropic key was accepted (a free token count; only the key and one fixed word were sent)." ;;
+    10) error "Your Anthropic key was refused — nothing was spent. The AI review will not run, and the result will be 'not finished' (exit 3) unless a sign of an attack fails it first. Check the key you gave as ANTHROPIC_API_KEY." ;;
+    *) warning "Could not check your Anthropic key (no clear answer from Anthropic); the scan will still try the review." ;;
+  esac
 }
 
 do_install() {
@@ -242,8 +289,9 @@ do_result() {
 
 case "${1:-}" in
   check) do_check ;;
+  key) do_key ;;
   install) do_install ;;
   scan) do_scan ;;
   result) do_result "${2:-}" ;;
-  *) error "usage: step.sh check | install | scan | result CODE"; exit 2 ;;
+  *) error "usage: step.sh check | key | install | scan | result CODE"; exit 2 ;;
 esac

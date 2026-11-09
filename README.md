@@ -34,7 +34,7 @@ jobs:
 ```
 
 For a build check that changes only when you decide, pin the step to a
-commit instead of `v1`: `faintprint/scan-action@<full commit> # v1.2.0`.
+commit instead of `v1`: `faintprint/scan-action@<full commit> # v1.3.0`.
 Dependabot can propose new pins.
 
 ## Inputs
@@ -47,7 +47,7 @@ Dependabot can propose new pins.
 | `review` | run the AI review of borderline passages, on your own Anthropic key | `false` |
 | `max-cost` | the most one run's AI review may cost, in US dollars; a review estimated above it does not start | `1.00` |
 | `allow-unfinished` | let a "not finished" result pass, with a warning | `false` |
-| `version` | the Faintprint version to install | `0.4.0` |
+| `version` | the Faintprint version to install | `0.5.0` |
 | `reports` | the report folder, and the name of the artefact it is kept as | `faintprint-reports` |
 | `upload-sarif` | upload the findings to GitHub code scanning, the Security tab (see below) | `false` |
 | `sarif-category` | the code scanning category of the upload; two Faintprint steps in one job, or a matrix, need one each | `faintprint-<job id>` |
@@ -131,7 +131,10 @@ within `max-cost`:
 - The deploy token goes to the install command only, in the password part
   of the index address, which pip prints as `****`; GitHub also blanks any
   secret value it sees in a log.
-- The Anthropic key goes to the scan only, and only when `review` is on.
+- The Anthropic key goes to the key check at the start of the job and to
+  the scan, and only when `review` is on. The key check is one free token
+  count that sends the key and one fixed word, never a server's text; a
+  refused key is said before anything is installed.
 - Inputs reach the step's script through environment variables, never as
   text pasted into a command.
 - A pull request from a fork gets no secrets, so the step stops there with
@@ -161,6 +164,11 @@ before, without the SARIF file.
 
 `v1.2.0` installs Faintprint 0.4.0 by default. The step itself is unchanged:
 it always scans exactly what `scan` names, and never opens a browser.
+
+`v1.3.0` installs Faintprint 0.5.0 by default. With `review: true`, a new
+first step checks that Anthropic accepts your key before anything is
+installed: one free token count that sends the key and one fixed word,
+never a server's text.
 
 ## About Faintprint
 

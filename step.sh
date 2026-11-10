@@ -49,10 +49,14 @@
 # text, with Python's standard library only, and never follows a redirect
 # (the key would go with it). A refused key is said before anything is
 # installed; the job goes on, so the reports are still kept.
+#
+# 1.4.0 (Faintprint 0.6.0) changes only the default version. Faintprint 0.6.0
+# also reads Codex's config file (a .toml file) when one is named in the scan
+# input; the step itself is unchanged.
 
 set -eu
 
-STEP_VERSION=1.3.0
+STEP_VERSION=1.4.0
 SARIF_NAME=faintprint.sarif
 INDEX=gitlab.com/api/v4/projects/faintprint%2Ffaintprint/packages/pypi/simple
 

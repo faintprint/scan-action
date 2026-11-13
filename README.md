@@ -34,7 +34,7 @@ jobs:
 ```
 
 For a build check that changes only when you decide, pin the step to a
-commit instead of `v1`: `faintprint/scan-action@<full commit> # v1.4.0`.
+commit instead of `v1`: `faintprint/scan-action@<full commit> # v1.5.0`.
 Dependabot can propose new pins.
 
 ## Inputs
@@ -173,6 +173,11 @@ never a server's text.
 `v1.4.0` installs Faintprint 0.6.0 by default, which also reads Codex's
 config file (`.codex/config.toml`) when `scan` names it. The step itself is
 unchanged.
+
+`v1.5.0` installs Faintprint 0.7.0 by default, which also reads the config
+files of eleven more apps when `scan` names one: `.zed/settings.json`,
+`opencode.json`, `.gemini/settings.json`, `.kiro/settings/mcp.json` and the
+like. The step itself is unchanged.
 
 ## About Faintprint
 

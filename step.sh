@@ -53,10 +53,15 @@
 # 1.4.0 (Faintprint 0.6.0) changes only the default version. Faintprint 0.6.0
 # also reads Codex's config file (a .toml file) when one is named in the scan
 # input; the step itself is unchanged.
+#
+# 1.5.0 (Faintprint 0.7.0) changes only the default version. Faintprint 0.7.0
+# also reads the config files of eleven more apps (Zed, opencode, Gemini CLI,
+# Kiro and others) when one is named in the scan input; the step itself is
+# unchanged.
 
 set -eu
 
-STEP_VERSION=1.4.0
+STEP_VERSION=1.5.0
 SARIF_NAME=faintprint.sarif
 INDEX=gitlab.com/api/v4/projects/faintprint%2Ffaintprint/packages/pypi/simple
 
